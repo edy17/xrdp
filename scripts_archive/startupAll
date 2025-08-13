@@ -1,0 +1,15 @@
+#!/bin/bash
+#*************************************************************************************
+# startup use by xrdp only for root user
+# Use without argument. Launch one time to configure user profile
+#*************************************************************************************
+# D. Malki : Creation     21/06/2021  VERSION: 1.00
+#*************************************************************************************
+# Enumerate all DBI tools users
+users=$( awk -F':' '{ print $1}' /etc/passwd | grep gcp-irn)
+for user in $users
+do
+  echo "process user $user..."
+ sudo -u $user /logiciel/scripts/startup
+done
+exit 0

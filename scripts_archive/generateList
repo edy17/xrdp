@@ -1,0 +1,233 @@
+#!/bin/bash
+#*************************************************************************************
+# Update saKey in vault from bucket 
+# Use with arguments force prod for force to update all
+# Use with arguments noforce prod to update only no saKey entry
+#*************************************************************************************
+# D. Malki : Creation     09/04/2021  VERSION: 1.00
+#*************************************************************************************
+cd /logiciel/scripts
+local_path=$(dirname $(readlink -f $0))
+. $local_path/functions
+force=$1
+envExec=$2
+irnToProcess=$3
+mysqlTimeout=10
+accessTypes=("dba" "admin" "ro" "rw")
+if [[ "$force" == force ]];then
+  echo "All service account credentials for buckets access  will be updated or added."
+else
+  echo "Only new service account credentials for buckets access will be added."
+fi
+echo "Starting bucket credential synchronization..."
+#get the list of irn to check
+listIrn=$(getListIrn)
+i=0
+for irn in $listIrn;do
+  if [[ "$irn" != "Keys" && "$irn" != "----" ]]; then
+    irn=${irn::-1}
+    if [[ "$irn" == "$irnToProcess" || "$irnToProcess" == "" ]]; then
+      echo "Processing $irn... "
+      # get the list of env
+      listEnv=$(getListAllEnv $vault_db_path/${irn}/api/)
+      # Loop on each env
+      for env in $listEnv;do
+        if [[ "$force" == "force" ]];then 
+          for accessType in ${accessTypes[@]}; do
+            #get SIA in declared user
+            sia=$(getSIAFromIrn $irn)
+            if [ -z "$sia" ]; then
+              echo "We don't find the SIA for the $irn that exist in Vault. There is no unix user declared in this host. Please create the user $accessType for $env and try again."
+            else
+              #Check if user exist
+              if [[ "$accessType" == "dba" ]];then
+                current_user=gcp-$irn-$sia-$env-db-admin
+              else
+                current_user=gcp-$irn-$sia-$env-db-$accessType
+              fi
+              if [[ -d /home/$current_user ]];then
+                current_user=gcp-$irn-$sia-$env-db-$accessType
+                jsonCrendentials=bucket_credentials_$current_user.json
+                if [[ "$envExec" == "prod" ]];then
+                  # setting bucket
+                  bucket_credentials=$gcp_bucket_sa_credentials_prod
+                fi
+                if [[ "$envExec" == "out_of_prod" ]];then
+                  # setting bucket
+                  bucket_credentials=$gcp_bucket_sa_credentials_out_of_prod
+                fi
+                # getting credentials json from bucket
+                gsutil cp gs://$bucket_credentials/$jsonCrendentials /tmp/$jsonCrendentials 2> /dev/null
+                #generate the json from the entries
+                uuid=$(uuidgen).json
+                $vault_application read -format=json $vault_db_path/$irn/api/$env/$accessType>/tmp/$uuid
+                if [[ ! -f /tmp/$jsonCrendentials ]]; then
+                  echo "No sa credentials for $irn $sia $accessType because we don't find the file $jsonCrendentials on the credentials bucket $bucket_credentials"
+                  touch /tmp/$jsonCrendentials
+                fi
+                #fill the keys of the array
+                declare -A swpKeyValueSecret=();while read -r key value; do swpKeyValueSecret[$key]="";done < <(jq '.data | keys' /tmp/$uuid | jq '.[]' | sed 's/\\"//g')
+                declare -A keyValueSecret=();while read -r key value; do keyValueSecret[$key]="";done < <(jq '.data | keys' /tmp/$uuid | jq '.[]')
+                #Now fill the values
+                for key in "${!keyValueSecret[@]}"; do keyValueSecret[$key]=$(jq '.data.'$key'' /tmp/$uuid);done
+                declare -A swpKeyValueSecret=();for key in "${!keyValueSecret[@]}"; do newKey=$(echo $key | sed 's/\\"//g');swpKeyValueSecret[$newKey]=$(echo ${keyValueSecret[$key]} | sed 's/\\"//g');done
+                #add saKey empty
+                key=\"saKey\"
+                swpKeyValueSecret[$key]=""
+                if [ -z ${swpKeyValueSecret["vpcEnv"]} ]; then
+                  if [[ $env == "dev"* ]];then
+                    swpKeyValueSecret[\"vpcEnv\"]=\"dev\"
+                  else
+                    swpKeyValueSecret[\"vpcEnv\"]=\"ope\"
+                  fi
+                fi
+                if [[ ${swpKeyValueSecret[\"tool\"]} == "\"dbeaver-pgsql\"" ]];then 
+                  #Check the version
+                  export PGPASSWORD=${swpKeyValueSecret[\"password\"]:1:-1}
+                  version=$(psql -w -h ${swpKeyValueSecret[\"host\"]:1:-1} -p ${swpKeyValueSecret[\"port\"]:1:-1} -d ${swpKeyValueSecret[\"database\"]:1:-1} -U ${swpKeyValueSecret[\"user\"]:1:-1} -c "SELECT version();" 2> /dev/null)
+                  if [[ $(echo $version | awk '{print $1}') == "version" ]]; then
+                    swpKeyValueSecret[\"versionServer\"]=\"$(echo $version | awk '{print $4}')\"
+                  else
+                    version=$(psql -w -h ${swpKeyValueSecret[\"host\"]:1:-1} -p ${swpKeyValueSecret[\"port\"]:1:-1} -d ${swpKeyValueSecret[\"database\"]:1:-1} -U ${swpKeyValueSecret[\"user\"]:1:-1} -c "SELECT version();" 2>&1 > /dev/null)
+                    echo "Unable to get the pgsql version for $current_user : $version"
+                  fi
+                fi
+                if [[ ${swpKeyValueSecret[\"tool\"]} == "\"dbeaver-mysql\"" ]];then
+                  #Check the version
+                  password=${swpKeyValueSecret[\"password\"]:1:-1}
+                  if [ -z $password ]; then
+                    password="xxxxxxxx"
+                  fi
+                  version=$($default_mysql -h ${swpKeyValueSecret[\"host\"]:1:-1} -P ${swpKeyValueSecret[\"port\"]:1:-1} -p$password -u ${swpKeyValueSecret[\"user\"]:1:-1} -Bse "SELECT version();" ${swpKeyValueSecret[\"database\"]:1:-1} 2> /dev/null)
+                  version=$(echo $version | cut -d. -f1,2)
+                  if [ -z "$version" ]; then
+                    echo "Unable to get the mysql version for $current_user"
+                    version=$($default_mysql --connect-timeout=$mysqlTimeout -h ${swpKeyValueSecret[\"host\"]:1:-1} -P ${swpKeyValueSecret[\"port\"]:1:-1} -p$password -u ${swpKeyValueSecret[\"user\"]:1:-1} -Bse "SELECT version();" ${swpKeyValueSecret[\"database\"]:1:-1} 2>&1 > /dev/null)
+                    echo "Unable to get the mysql version for $current_user : $version"
+                 else
+                    swpKeyValueSecret[\"versionServer\"]=\"$version\"
+                  fi
+                fi
+                #Now we can generate the entry
+                cmd="$vault_application write $vault_db_path/$irn/api/$env/$accessType"
+                for key in "${!swpKeyValueSecret[@]}"; do
+                  if [[ $key == \"saKey\" ]];then
+                    cmd=$cmd\ $key\=@/tmp/$jsonCrendentials
+                  else
+                    cmd=$cmd\ $key\=${swpKeyValueSecret[$key]}
+                  fi
+                done
+                #echo $cmd
+                eval $cmd
+                rm -rf /tmp/$uuid
+                rm -rf /tmp/$jsonCrendentials
+              else
+               echo "the user $current_user is not present in this environment" 
+              fi
+            fi
+          done
+        else
+          for accessType in ${accessTypes[@]}; do
+            #get SIA in declared user
+            sia=$(getSIAFromIrn $irn)
+            if [ -z "$sia" ]; then
+              echo "We don't find the SIA for the $irn that exist in Vault. There is no unix user declared in this host. Please create the user $accessType for $env and try again."
+            else
+              #Check if user exist
+              if [[ "$accessType" == "dba" ]];then
+                current_user=gcp-$irn-$sia-$env-db-admin
+              else
+                current_user=gcp-$irn-$sia-$env-db-$accessType
+              fi
+              if [[ -d /home/$current_user ]];then
+                current_user=gcp-$irn-$sia-$env-db-$accessType
+                jsonCrendentials=bucket_credentials_$current_user.json
+                #check if the sa credentials yet exists in Vault
+                saKeyFromVault=$($vault_application kv get -field=saKey $vault_db_path/$irn/api/$env/$accessType 2> /dev/null)
+                if [ -z "$saKeyFromVault" ]; then
+                  echo "Try to add sakey in vault because it doesn't exist in it."
+                  jsonCrendentials=bucket_credentials_gcp-$irn-$sia-$env-db-$accessType.json
+                  if [[ "$envExec" == "prod" ]];then
+                    # setting bucket
+                    bucket_credentials=$gcp_bucket_sa_credentials_prod
+                  fi
+                  if [[ "$envExec" == "out_of_prod" ]];then
+                    # setting bucket
+                    bucket_credentials=$gcp_bucket_sa_credentials_out_of_prod
+                  fi
+                  # getting credentials json from bucket
+                  gsutil cp gs://$bucket_credentials/$jsonCrendentials /tmp/$jsonCrendentials 2> /dev/null
+                  #generate the json from the entries
+                  uuid=$(uuidgen).json
+                  $vault_application read -format=json $vault_db_path/$irn/api/$env/$accessType>/tmp/$uuid
+                  if [[ ! -f /tmp/$jsonCrendentials ]]; then
+                    echo "No sa credentials for $irn $sia $accessType because we don't find the file $jsonCrendentials on the credentials bucket $bucket_credentials"
+                    touch /tmp/$jsonCrendentials
+                  fi
+                  #fill the keys of the array
+                  declare -A swpKeyValueSecret=();while read -r key value; do swpKeyValueSecret[$key]="";done < <(jq '.data | keys' /tmp/$uuid | jq '.[]' | sed 's/\\"//g')
+                  declare -A keyValueSecret=();while read -r key value; do keyValueSecret[$key]="";done < <(jq '.data | keys' /tmp/$uuid | jq '.[]')
+                  #Now fill the values
+                  for key in "${!keyValueSecret[@]}"; do keyValueSecret[$key]=$(jq '.data.'$key'' /tmp/$uuid);done
+                  declare -A swpKeyValueSecret=();for key in "${!keyValueSecret[@]}"; do newKey=$(echo $key | sed 's/\\"//g');swpKeyValueSecret[$newKey]=$(echo ${keyValueSecret[$key]} | sed 's/\\"//g');done
+                  #add saKey empty
+                  key=\"saKey\"
+                  swpKeyValueSecret[$key]=""
+                  if [ -z ${swpKeyValueSecret["vpcEnv"]} ]; then
+                    if [[ $env == "dev" ]];then
+                      swpKeyValueSecret["vpcEnv"]="dev"
+                    else
+                      swpKeyValueSecret["vpcEnv"]="ope"
+                    fi
+                  fi
+                  if [[ ${swpKeyValueSecret[\"tool\"]} == "\"dbeaver-pgsql\"" ]];then 
+                    #Check the version
+                    export PGPASSWORD=${swpKeyValueSecret[\"password\"]:1:-1}
+                    version=$(psql --connect-timeout=$mysqlTimeout -w -h ${swpKeyValueSecret[\"host\"]:1:-1} -p ${swpKeyValueSecret[\"port\"]:1:-1} -d ${swpKeyValueSecret[\"database\"]:1:-1} -U ${swpKeyValueSecret[\"user\"]:1:-1} -c "SELECT version();" 2> /dev/null)
+                    if [[ $(echo $version | awk '{print $1}') == "version" ]]; then
+                      swpKeyValueSecret[\"versionServer\"]=\"$(echo $version | awk '{print $4}')\"
+                    else 
+                      echo "Unable to get the pgsql version for $current_user"
+                    fi
+                  fi
+                  if [[ ${swpKeyValueSecret[\"tool\"]} == "\"dbeaver-mysql\"" ]];then
+                    #Check the version
+                    password=${swpKeyValueSecret[\"password\"]:1:-1}
+                    if [ -z $password ]; then
+                      password="xxxxxxxx"
+                    fi
+                    version=$($default_mysql -h ${swpKeyValueSecret[\"host\"]:1:-1} -P ${swpKeyValueSecret[\"port\"]:1:-1} -p$password -u ${swpKeyValueSecret[\"user\"]:1:-1} -Bse "SELECT version();" ${swpKeyValueSecret[\"database\"]:1:-1} 2> /dev/null)
+                    version=$(echo $version | cut -d. -f1,2)
+                    if [ -z "$version" ]; then
+                      echo "Unable to get the mysql version for $current_user"
+                    else
+                      swpKeyValueSecret[\"versionServer\"]=\"$version\"
+                    fi
+                  fi
+                  #Now we can generate the entry
+                  cmd="$vault_application write $vault_db_path/$irn/api/$env/$accessType"
+                  for key in "${!swpKeyValueSecret[@]}"; do
+                      if [[ $key == \"saKey\" ]];then
+                        cmd=$cmd\ $key\=@/tmp/$jsonCrendentials
+                      else
+                        cmd=$cmd\ $key\=${swpKeyValueSecret[$key]}
+                      fi
+                  done
+                  eval $cmd
+                  rm -rf /tmp/$uuid
+                  rm -rf /tmp/$jsonCrendentials
+                fi
+              else
+                echo "the user $current_user is not present in this environment" 
+              fi
+            fi
+          done
+        fi 
+      done
+    fi
+  fi
+done
+
+echo "Synchronization done."
+exit 0
+

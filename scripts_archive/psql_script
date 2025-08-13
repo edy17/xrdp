@@ -1,0 +1,19 @@
+#!/bin/bash
+#*************************************************************************************
+# For pgsql, process sql command from a file
+# Use with sql file argument
+#*************************************************************************************
+# D. Malki : Creation     08/03/2023 VERSION: 1.00
+#*************************************************************************************
+local_path=/logiciel/scripts
+. $local_path/functions
+host=$(getVaultFieldFromUser $USER host)
+port=$(getVaultFieldFromUser $USER port)
+user=$(getVaultFieldFromUser $USER user)
+password=$(getVaultFieldFromUser $USER password)
+database=$(getVaultFieldFromUser $USER database)
+file=$1
+export PGPASSWORD=$password
+$current_psql -h $host -d $database -U $user -p $port -a -f $file
+export PGPASSWORD=$password
+$current_psql -h $host -d $database -U $user -p $port -a -f $file

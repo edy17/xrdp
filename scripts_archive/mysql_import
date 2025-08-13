@@ -1,0 +1,33 @@
+#!/bin/bash
+#*************************************************************************************
+# Import data in mysql database from a file.
+# Use with data file argument.
+# The process depends on the extension of the file.
+# csv : psql copy for file with csv format (separator ';')
+# dmp : pg_restore for file with custom format from pg_dump
+#*************************************************************************************
+# D. Malki : Creation     17/01/2024 VERSION: 1.00
+#*************************************************************************************
+local_path=/logiciel/scripts
+. $local_path/functions
+TERM=""
+host=$(getVaultFieldFromUser $USER host)
+port=$(getVaultFieldFromUser $USER port)
+user=$(getVaultFieldFromUser $USER user)
+password=$(getVaultFieldFromUser $USER password)
+database=$(getVaultFieldFromUser $USER database)
+file=$1
+extension=${file: -3}
+case "$extension" in
+'csv')
+  IFS=. read  -r -a data <<< "$file"
+  schema=${data[0]}
+  table=${data[1]}
+  $current_mysql --host=$host --port=$port --user=$user --password=$password --database=$database --execute "LOAD DATA LOCAL INFILE '$file' INTO TABLE $table FIELDS TERMINATED BY ';';"
+;;
+*)
+  echo "Unknown extension for the import file. It must a .csv file format with ; for delimiter"
+;;
+esac
+
+ 

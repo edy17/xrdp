@@ -1,0 +1,11 @@
+#!/bin/bash
+#*************************************************************************************
+# clear profile for mate desktop
+# Use without argument. Launch one time to reset user profile
+#*************************************************************************************
+# D. Malki : Creation     10/05/2020  VERSION: 1.00
+#*************************************************************************************
+cd /logiciel/scripts
+local_path=$(dirname $(readlink -f $0))
+. $local_path/functions
+delFolderIfExist $desktop_profile_path

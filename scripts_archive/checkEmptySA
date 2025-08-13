@@ -1,0 +1,36 @@
+#!/bin/bash
+#*************************************************************************************
+# Update saKey in vault from bucket 
+# Use with arguments force prod for force to update all
+# Use with arguments noforce prod to update only no saKey entry
+#*************************************************************************************
+# D. Malki : Creation     09/04/2021  VERSION: 1.00
+#*************************************************************************************
+cd /logiciel/scripts
+local_path=$(dirname $(readlink -f $0))
+. $local_path/functions
+accessTypes=("admin" "ro" "rw")
+echo "Starting bucket checking credential bucket..."
+#get the list of irn to check
+listIrn=$(getListIrn)
+i=0
+for irn in $listIrn;do
+  if [[ "$irn" != "Keys" && "$irn" != "----" ]]; then
+    irn=${irn::-1}
+    echo "Processing $irn..."
+    # get the list of env
+    listEnv=$(getListAllEnv $vault_db_path/${irn}/api/)
+    # Loop on each env
+    for env in $listEnv;do
+      for accessType in ${accessTypes[@]}; do
+        saKey=$($vault_application kv get -field=saKey $vault_db_path/$irn/api/$env/$accessType 2> /dev/null)
+        if [[ -z $saKey ]]; then
+          echo "$vault_db_path/$irn/api/$env/$accessType without saKey"
+        fi
+      done
+    done
+  fi
+done
+echo "Check done."
+exit 0
+

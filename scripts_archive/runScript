@@ -1,0 +1,26 @@
+#!/bin/bash
+#*************************************************************************************
+# Run scripts from a list
+# 2 arguments 
+# - the full path of a file of scripts to run ( Format of the file: one row by task file)
+# - the ipn executor of the script 
+#*************************************************************************************
+# D. Malki : Creation     13/01/2023 VERSION: 1.00
+#*************************************************************************************
+cd /logiciel/scripts
+local_path=$(dirname $(readlink -f $0))
+. $local_path/functions
+filename=$1
+ipn=$2
+tool=$(getVaultFieldFromUser $USER tool)
+case "$tool" in
+'pgsql')$scriptRunner -Djava.awt.headless=true -DbucketScript=$(getBucketNameFromUser $USER) -DbucketScriptArchive=$(getBucketNameFromUser $USER)_archive -DtoolScript=$psql_script -DtoolImport=$psql_import -DdataFilter=$psql_import_ext -DscriptFilter=$psql_script_ext -DdataFormat="^[\w,\s-]+\.[\w,\s-]+\.[\w,\s-]+$" -DlistFile=$filename -DuserId=$ipn $scriptRunnerJar
+;;
+'mysql')$scriptRunner -Djava.awt.headless=true -DbucketScript=$(getBucketNameFromUser $USER) -DbucketScriptArchive=$(getBucketNameFromUser $USER)_archive -DtoolScript=$mysql_script -DtoolImport=$mysql_import -DdataFilter=$mysql_import_ext -DscriptFilter=$mysql_script_ext -DdataFormat="^[\w,\s-]+\.[\w,\s-]+\.[\w,\s-]+$" -DlistFile=$filename -DuserId=$ipn $scriptRunnerJar
+;;
+'mongo')$scriptRunner -Djava.awt.headless=true -DbucketScript=$(getBucketNameFromUser $USER) -DbucketScriptArchive=$(getBucketNameFromUser $USER)_archive -DtoolScript=$mgo_script -DtoolImport=$mgo_import -DdataFilter=$mgo_import_ext -DscriptFilter=$mgo_script_ext -DdataFormat="^[\w,\s-]+\.[\w,\s-]+\.[\w,\s-]+$" -DlistFile=$filename -DuserId=$ipn $scriptRunnerJar
+;;
+'*')
+echo "unknown tool for this user (it should be one of this: pgsql, mysql or mongo)"
+;;
+esac

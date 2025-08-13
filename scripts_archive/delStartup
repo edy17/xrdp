@@ -1,0 +1,13 @@
+#!/bin/bash
+#*************************************************************************************
+# delLock use by xrdp
+# Use without argument. Launch by startwm.sh to delete lock file in dbeaver.
+#*************************************************************************************
+# D. Malki : Creation     10/05/2020  VERSION: 1.00
+#*************************************************************************************
+# load functions
+cd /logiciel/scripts
+local_path=$(dirname $(readlink -f $0))
+. $local_path/functions
+delFileIfExist $autostart_path/dbeaver.desktop
+exit 0

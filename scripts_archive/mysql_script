@@ -1,0 +1,17 @@
+#!/bin/bash
+#*************************************************************************************
+# For mysql, process sql command from a file
+# Use with sql file argument
+#*************************************************************************************
+# D. Malki : Creation     17/01/2024 VERSION: 1.00
+#*************************************************************************************
+local_path=/logiciel/scripts
+. $local_path/functions
+TERM=linux
+host=$(getVaultFieldFromUser $USER host)
+port=$(getVaultFieldFromUser $USER port)
+user=$(getVaultFieldFromUser $USER user)
+password=$(getVaultFieldFromUser $USER password)
+database=$(getVaultFieldFromUser $USER database)
+file=$1
+$current_mysql --host=$host --port=$port --user=$user --password=$password --database=$database < $file

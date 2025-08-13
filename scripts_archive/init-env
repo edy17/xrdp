@@ -1,0 +1,84 @@
+#!/bin/bash
+#*****************************************************
+# Set Env variables
+#*****************************************************
+# D. Malki : Creation     05/05/2020  VERSION: 1.00
+#*****************************************************
+red=`tput setaf 1`
+green=`tput setaf 2`
+reset=`tput sgr0`
+config_path=~/.config
+autostart_path=$config_path/autostart
+dbeaver_application=/logiciel/dbeaver/dbeaver
+robo3t_version=1.3.1
+mongodb_version=3.6.0
+robo3t_application=/logiciel/robo3t-${robo3t_version}-linux-x86_64-7419c406/bin/robo3t
+local_user_robo3t_connection=~/.3T/robo-3t/${robo3t_version}/robo3t.json
+tbr_irn=irn-57989
+#vault_tbr_prefix_path=secret/projects/irn-57989/tbr
+vault_tbr_prefix_path=secret/projects/irn-71982/dbi
+vault_db_path=$vault_tbr_prefix_path/db
+vault_application=/logiciel/vault/vault
+dbeaver_profile_template_path=/logiciel/dbeaver_profile_template
+dbeaver_profile_pgsql_folder=pgsql
+dbeaver_profile_folder=DBeaverData
+local_user_path=~/.local
+local_user_share_path=$local_user_path/share
+local_user_dbeaver_path=$local_user_share_path/DBeaverData
+local_user_dbeaver_datasource=$local_user_dbeaver_path/workspace6/General/.dbeaver/data-sources.json
+local_user_dbeaver_credential=$local_user_dbeaver_path/workspace6/General/.dbeaver/credentials-config.json
+local_user_dbeaver_drivers=$local_user_dbeaver_path/workspace6/.metadata/.plugins/org.jkiss.dbeaver.core/drivers.xml
+robo3t_profile_folder=.3T
+local_user_robo3t_path=~/$robo3t_profile_folder
+desktop_profile_path=$config_path/dconf
+desktop_profile_folder=dconf
+clouder=gcp
+if [[ "$clouder" == "aws" ]]; then
+  bucketTool=s3fs
+  mountPoint=s3_import_export
+fi
+if [[ "$clouder" == "gcp" ]]; then
+  bucketTool=gcsfuse
+  mountPoint=bucket_import_export
+fi
+local_user_compass_connections_path=~/.config/MongoDB\ Compass/Connections
+local_user_compass_path=~/.config/MongoDB\ Compass
+compass_profile_folder=MongoDB\ Compass
+gcp_bucket_sa_credentials_out_of_prod=db-sa-credentials-out-of-prod
+gcp_bucket_sa_credentials_prod=db-sa-credentials-prod
+wallix_api_key=zUOaI4KWJVuIiz4zvAa6VkZglAaFKbEzMKGyMcyEZxM
+wallix_address=10.144.120.124
+default_mysql=/logiciel/mysql-8.0/mysql
+#path for mysql
+mysql_8=/logiciel/mysql-8.0/
+mysql_56=/logiciel/mysql-5.6/
+mysql_57=/logiciel/mysql-5.7/
+#path for pgsql
+pgsql_12=/usr/pgsql-12
+pgsql_11=/usr/pgsql-11
+pgsql_10=/usr/pgsql-10
+pgsql_96=/usr/pgsql-96
+pgsql_95=/usr/pgsql-95
+#chrome
+chrome=google-chrome
+current_psql=$pgsql_12/bin/psql
+current_pg_restore=$pgsql_12/bin/pg_restore
+current_mysql=$mysql_8/mysql
+current_mongosh=/logiciel/mongosh-2.2.5-linux-x64/bin/mongosh
+current_mongoimport=/logiciel/mongodb-database-tools-rhel70-x86_64-100.9.4/bin/mongoimport
+currentScriptRunnerPath=/logiciel/scriptRunnerV1.0
+scriptRunner="java -DOS=unix -DauthURL=https://sso.renault.com/oauth2/aus133y6mks4ptDss417 -DauthClientId=irn-71982_ope_native_5xohermncbal"
+scriptRunnerJar="-jar $currentScriptRunnerPath/scriptRunner.jar"
+psql_script_ext=sql
+psql_import_ext=csv,dmp
+mysql_script_ext=sql
+mysql_import_ext=csv
+mgo_script_ext=js
+mgo_import_ext=json
+mgo_script=/logiciel/scripts/mgo_script
+mgo_import=/logiciel/scripts/mgo_import
+psql_script=/logiciel/scripts/psql_script
+psql_import=/logiciel/scripts/psql_import
+mysql_script=/logiciel/scripts/mysql_script
+mysql_import=/logiciel/scripts/mysql_import
+headlessScript=/logiciel/scripts/runScript

@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# this could be launched from rc.local via screen
+#   echo '/usr/bin/screen -dmS xrdp_cleanup /logiciel/scripts/cleanupDisconnectedSessions' | at now
+#
+while [ 1 ]; do
+   # loop through all listening Xvnc processes and make sure there's an established connection
+   for pid in `lsof -b -w -n -c /^Xvnc$/b -a -i@127.0.0.1 | grep L[I]STEN | awk '{print $2};'`; do
+      duration=$(ps -p $pid -o etimes=)
+      duration=${duration// /}
+      if [[ $duration -gt 120 ]]; then
+        # get user for the established session
+        euser=`lsof -b -w -n -c /^Xvnc$/b -a -i@127.0.0.1 | grep L[I]STEN | grep "$pid" | awk '{print $3};'`
+        esta=`lsof -b -w -n -c /^Xvnc$/b -a -iTCP:0-10000 | grep E[S]TABLISHED | grep "$pid" | awk '{print $2};'`
+        test -z "$euser" && echo "Unable to find user in lsof output!"
+        if [ -n "$esta" ]; then
+           # regular status update
+           echo "user $euser has an established sesson on pid $pid"
+        else
+           echo "killing pid $pid for user $euser"
+           kill $pid
+        fi
+      fi
+   done
+done
+

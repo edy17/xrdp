@@ -1,0 +1,27 @@
+#!/bin/bash
+#*************************************************************************************
+# startup use by xrdp
+# Use without argument. Launch one time to configure user profile
+#*************************************************************************************
+# D. Malki : Creation     10/05/2020  VERSION: 1.00
+#*************************************************************************************
+# generate the autostart file
+cd /logiciel/scripts
+local_path=$(dirname $(readlink -f $0))
+. $local_path/setProfile
+. $local_path/generateStartupConfig
+#copy the template dbeaver profile (driver integration)
+checkPath $local_user_path
+checkPath $local_user_share_path
+delFolderIfExist $local_user_dbeaver_path
+cp -r $dbeaver_profile_template_path/$dbeaver_profile_folder $local_user_share_path/$dbeaver_profile_folder
+#copy the secure desktop configuration
+delFolderIfExist $desktop_profile_path
+cp -r $dbeaver_profile_template_path/$desktop_profile_folder $desktop_profile_path
+#copy the robo3t template profile
+delFolderIfExist $local_user_robo3t_path
+cp -r $dbeaver_profile_template_path/$robo3t_profile_folder $local_user_robo3t_path
+#copy the compass template profile
+rm -rf "$local_user_compass_path"
+cp -r $dbeaver_profile_template_path/"$compass_profile_folder" "$local_user_compass_path"
+exit 0

@@ -1,0 +1,96 @@
+#!/bin/bash
+#*************************************************************************************
+# generate mep files if the profile doesn't yet exist in Vault 
+#*************************************************************************************
+# D. Malki : Creation     11/09/2023  VERSION: 1.00
+#*************************************************************************************
+cd /logiciel/scripts
+local_path=$(dirname $(readlink -f $0))
+. $local_path/functions
+accessTypes=("admin" "ro" "rw")
+acceptedEnv=("re7" "int")
+echo "Starting profiles checking..."
+#get the list of irn to check
+listIrn=$(getListIrn)
+i=0
+targetFile=list_of_profile_to_create
+rm -rf $targetFile
+#generate the headers of the file
+echo "tool;clouder;sia;irn;env;access;fct-password;hostname;port;hosts;replicaset;access-env;certificate;database;host;password;user">>$targetFile
+for irn in $listIrn;do
+  if [[ "$irn" != "Keys" && "$irn" != "----" && "$irn" != "irn-00000/" && "$irn" != "irn-71982/" ]]; then
+    irn=${irn::-1}
+    echo "Processing $irn..."
+    # get the list of env
+    listEnv=$(getListAllEnv $vault_db_path/${irn}/api/)
+    # Loop on each env
+    for env in $listEnv;do
+      #check if envType re7 or int exist
+      envType=${env:0:3}
+      if [[ $envType == "re7" || $envType == "int" || $envType == "ope" ]]; then
+        #echo "env=$envType"
+        #get the accesstype mep
+        userMep=$($vault_application kv get -field=user $vault_db_path/$irn/api/$env/mep 2> /dev/null)
+        # if userMep doesn't exist it means that the mep access type doesn't exist
+        if [[ -z $userMep ]]; then
+          #echo "the access type mep doesn't exist"
+          # intialize variables
+          database=""
+          host=""
+          password=""
+          port=""
+          user=""
+          sia=""
+          hostname=""
+          port=""
+          hosts=""
+          replicaset=""
+          certificate=""
+          #check the kind of tools
+          #echo "$vault_application kv get -field=tool $vault_db_path/$irn/api/$env/admin"
+          tool=$($vault_application kv get -field=tool $vault_db_path/$irn/api/$env/admin 2> /dev/null)
+          #echo "tool=$tool for $irn and $env"
+          case "$tool" in
+            dbeaver*)
+               #get the needed value in dba profile
+               database=$($vault_application kv get -field=database $vault_db_path/$irn/api/$env/dba 2> /dev/null)
+               host=$($vault_application kv get -field=host $vault_db_path/$irn/api/$env/dba 2> /dev/null)
+               password=$($vault_application kv get -field=password $vault_db_path/$irn/api/$env/dba 2> /dev/null)
+               port=$($vault_application kv get -field=port $vault_db_path/$irn/api/$env/dba 2> /dev/null)
+               user=$($vault_application kv get -field=user $vault_db_path/$irn/api/$env/dba 2> /dev/null)
+               sia=$(getSIAFromIrn $irn)
+               irnNumber=${irn#"irn-"}
+               #add entry in the file
+               echo "$tool;$clouder;$sia;$irnNumber;$env;mep;;;$port;;;"db-access-production";;$database;$host;$password;$user">>$targetFile               
+               echo "create line for mep profile with $env"
+               #echo "it's a dbeaver"
+            ;;
+            compass*)
+               user=$($vault_application kv get -field=user $vault_db_path/$irn/api/$env/admin 2> /dev/null)
+               sia=$(getSIAFromUser $user)
+               hostname=$($vault_application kv get -field=hostname $vault_db_path/$irn/api/$env/admin 2> /dev/null)
+               port=$($vault_application kv get -field=port $vault_db_path/$irn/api/$env/admin 2> /dev/null)
+               hosts=$($vault_application kv get -field=hosts $vault_db_path/$irn/api/$env/admin 2> /dev/null)
+               replicaset=$($vault_application kv get -field=replicaset $vault_db_path/$irn/api/$env/admin 2> /dev/null)
+               certificate=$($vault_application kv get -field=certificate $vault_db_path/$irn/api/$env/admin 2> /dev/null)
+               certificate=${certificate//$'\n'/'\n'}
+               irnNumber=${irn#"irn-"}
+               #add entry in the file
+               echo "$tool;$clouder;$sia;$irnNumber;$env;mep;;$hostname;$port;$hosts;$replicaset;"db-access-production";$certificate;;;;">>$targetFile 
+               echo "create line for mep profile with $env"
+               #echo "it's a compass"
+            ;;
+            *)
+              echo  "it's not processed case for tool: $tool"
+            ;;
+          esac
+        else
+          echo "mep profil yet exists"
+        fi
+      fi
+    done
+  fi
+done
+echo "Check done."
+exit 0
+

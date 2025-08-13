@@ -1,0 +1,35 @@
+#!/bin/bash
+#*************************************************************************************
+# Import data in pgsql database from a file.
+# Use with data file argument.
+# The process depends on the extension of the file.
+# csv : psql copy for file with csv format (separator ';')
+# dmp : pg_restore for file with custom format from pg_dump
+#*************************************************************************************
+# D. Malki : Creation     08/03/2023  VERSION: 1.00
+#*************************************************************************************
+local_path=/logiciel/scripts
+. $local_path/functions
+host=$(getVaultFieldFromUser $USER host)
+port=$(getVaultFieldFromUser $USER port)
+user=$(getVaultFieldFromUser $USER user)
+password=$(getVaultFieldFromUser $USER password)
+database=$(getVaultFieldFromUser $USER database)
+file=$1
+extension=${file: -3}
+export PGPASSWORD=$password
+case "$extension" in
+'csv')
+  IFS=. read  -r -a data <<< "$file"
+  schema=${data[0]}
+  table=${data[1]}
+  $current_psql -h $host -d $database -U $user -p $port -a -c "set schema '$schema';" -c "\\copy $table from '$file' delimiter ';' CSV HEADER;"
+;;
+'dmp')
+  $current_pg_restore -h $host -d $database -U $user -p $port --clean $file
+;;
+*)
+  echo "Unknown extension for the import file."
+;;
+esac
+ 

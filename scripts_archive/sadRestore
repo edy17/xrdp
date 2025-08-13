@@ -1,0 +1,20 @@
+#!/bin/bash
+#*************************************************************************************
+# Restore dump from sad on prem
+# Use without argument
+#*************************************************************************************
+# D. Malki : Creation     05/01/2024  VERSION: 1.00
+#*************************************************************************************
+rm -rf /tmp/sad
+mkdir /tmp/sad
+gsutil cp gs://db-export-import-prod/sad/dump /tmp/sad/dump.tar
+gsutil rm gs://db-export-import-prod/sad/dump
+cd /tmp/sad
+tar xvf /tmp/sad/dump.tar
+rm -rf *.log
+rm -rf *.tar
+dump=$(find /tmp/sad -type f -exec ls -t1 {} + | head -1)
+timestamp_date=$(date +%Y-%m-%d_%H:%M:%S)
+/logiciel/mongodb-database-tools-rhel70-x86_64-100.7.0/bin/mongorestore --uri=mongodb+srv://mgo-sad-ope01-pl-0.raae7.mongodb.net --username=tmp_user_import --password=OwnemZbI9gn9jqc3 --archive=$dump --drop --gzip > /tmp/sad/${timestamp_date}_sad.log 2>&1
+gsutil cp /tmp/sad/${timestamp_date}_sad.log gs://db-export-import-prod/sad/${timestamp_date}_sad.log
+java -Dbucket=sad-67267-mongo-logs  -DserviceAccountCredentialFile=/logiciel/sad_cred/sa.json -Daction=upload -DsourceFile=/tmp/sad/${timestamp_date}_sad.log -DtargetFile=${timestamp_date}_sad.log -jar /logiciel/UtilBucket.jar

@@ -1,0 +1,125 @@
+#!/bin/bash
+#*************************************************************************************
+# Generate a connection file for the user profile
+# Use with nor argument
+# get from vault connection information (the host, the port, the db name, 
+# the user and the password) and generate connection file for dbeaver
+#*************************************************************************************
+# D. Malki : Creation     10/05/2020  VERSION: 1.00
+# D. Malki : Evlution     03/02/2021  VERSION: 1.10
+#*************************************************************************************
+#. /etc/rc.d/init.d/functions
+#local_path=$(dirname $(readlink -f $0))
+echo $USER
+local_path=/logiciel/scripts
+. $local_path/functions
+dba=$(isDBAFromUser $USER)
+env=$(getEnvFromUser $USER)
+#in case of dbeaver
+delFileIfExist $local_user_dbeaver_datasource
+delFileIfExist $local_user_dbeaver_credential
+#in case of compass todo 
+if [[ "$dba" == "1" ]]; then
+  #in the dba case we have to generate all connection
+  listIrn=$(getListIrn)
+  #arrIrn=$($listIrn | tr " " "\n")
+  i=0
+  #Loop on all irn of the path and get secret with the same env (dev, re7, int, pre, ope)
+  for irn in $listIrn; do
+    if [[ "$irn" != "Keys" && "$irn" != "----" ]]; then
+      # get the list of env
+      listEnv=$(getListEnv  $vault_db_path/${irn}api/)
+      # Loop on each env
+      for env in $listEnv;do
+        host=$($vault_application kv get -field=host $vault_db_path/${irn}api/${env}$(getAccessTypeFromUser $USER))
+        user=$($vault_application kv get -field=user $vault_db_path/${irn}api/${env}$(getAccessTypeFromUser $USER))
+        password=$($vault_application kv get -field=password $vault_db_path/${irn}api/${env}$(getAccessTypeFromUser $USER))
+        port=$($vault_application kv get -field=port $vault_db_path/${irn}api/${env}$(getAccessTypeFromUser $USER))
+        database=$($vault_application kv get -field=database $vault_db_path/${irn}api/${env}$(getAccessTypeFromUser $USER))
+        tool=$($vault_application kv get -field=tool $vault_db_path/${irn}api/${env}$(getAccessTypeFromUser $USER))
+        name=${irn}-${env}
+        name=${name///}
+        #now we can build connection/credential file
+        case "$tool" in
+        'dbeaver-pgsql')
+          ((iDBeaver=iDBeaver+1))
+          if [[ "$iDBeaver" == "1" ]]; then
+            $(initDatasource)
+          fi
+          $(writeDatasourcePgsql $iDBeaver $name $host $port $database $user $password)
+        ;;
+        'dbeaver-mysql')
+          ((iDBeaver=iDBeaver+1))
+          if [[ "$iDBeaver" == "1" ]]; then
+            $(initDatasource)
+          fi
+          $(writeDatasourceMysql $iDBeaver $name $host $port $database $user $password)
+        ;;
+        'robo3t')
+          ((iRobo3t=iRobo3t+1))    
+        ;;
+        'compass')
+          ((iCompass=iCompass+1)) 
+        ;;
+        '*')
+          echo "Unknow tool : $tool"
+        ;;
+        esac      
+      done
+    fi
+  done
+  $(closeDatasource)
+else
+  #in case of simple user
+  host=$(getVaultFieldFromUser $USER host)
+  port=$(getVaultFieldFromUser $USER port)
+  user=$(getVaultFieldFromUser $USER user)
+  password=$(getVaultFieldFromUser $USER password)
+  database=$(getVaultFieldFromUser $USER database)
+  tool=$(getVaultFieldFromUser $USER tool)
+  irn=$(getIrnFromUser $USER)
+  sia=$(getSIAFromUser $USER)
+  name=${irn}-${env}
+  case "$tool" in
+  'dbeaver-pgsql')
+    #now we can build connection/credential file
+    $(initDatasource)
+    $(writeDatasourcePgsql 1 $name $host $port $database $user $password)
+    $(closeDatasource)
+  ;;
+  'dbeaver-mysql')
+    #now we can build connection/credential file
+    $(initDatasource)
+    $(writeDatasourceMysql 1 $name $host $port $database $user $password)
+    $(closeDatasource)
+  ;;
+  'robo3t')
+    #now we can build connection/credential file
+    isReplicaset=$(getVaultFieldFromUser $USER isReplicaset)
+    certificateLocation=$(getVaultFieldFromUser $USER sslCALocation)
+    $(initRobo3tConnection)
+    $(writeRobo3tConnection $env $host $port $database $user $password $sia $isReplicaset $certificateLocation)
+    $(closeRobo3tConnection)
+  ;;
+  'compass')
+    hostname=$(getVaultFieldFromUser $USER hostname)
+    #port=$(getVaultFieldFromUser $USER port)
+    #hosts=$(getVaultFieldFromUser $USER hosts)
+    #replicaset=$(getVaultFieldFromUser $USER replicaset)
+    #user=$(getVaultFieldFromUser $USER user)
+    certificate=$(getVaultFormattedFieldFromUser $USER certificate)
+    pemLocation=~/.atlas_$USER.pem
+    echo -e "$certificate">$pemLocation
+    #now we can build connection/credential file
+    #isReplicaset=$(getVaultFieldFromUser $USER isReplicaset)
+    certificateLocation=$(getVaultFieldFromUser $USER sslCALocation)
+    deleteConnections="$local_user_compass_connections_path"
+    rm -rf "$deleteConnections"/*
+    #$(writeCompassConnection $hostname $port $hosts $replicaset $user $pemLocation)
+    $(writeCompassConnection $hostname $pemLocation)
+  ;;
+  '*')
+  echo "*"
+  ;;
+  esac
+fi

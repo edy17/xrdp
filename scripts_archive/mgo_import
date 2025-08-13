@@ -1,0 +1,29 @@
+#!/bin/bash
+#*************************************************************************************
+# For mongodb, process commands from a file
+# Use with commands file argument
+#*************************************************************************************
+# D. Malki : Creation     08/03/2023 VERSION: 1.00
+#*************************************************************************************
+local_path=/logiciel/scripts
+. $local_path/functions
+file=$1
+hostname=$(getVaultFieldFromUser $USER hostname)
+certificate=$(getVaultFormattedFieldFromUser $USER certificate)
+pemLocation=~/.atlas_$USER.pem
+echo -e "$certificate">$pemLocation
+IFS=/ read  -r -a path <<< "$file"
+last=${#path[@]}
+filename=${path[$last-1]} 
+IFS=. read  -r -a data <<< "$filename"
+db=${data[0]}
+col=${data[1]}
+ext=${data[2]}
+extNeeded=json
+if [[ "$ext" = "json" ]]; then 
+  $current_mongoimport --uri="mongodb+srv://$hostname/$db?authSource=%24external&authMechanism=MONGODB-X509" --stopOnError --numInsertionWorkers=10 --jsonArray --type=json --sslPEMKeyFile $pemLocation --file=$file --collection=$col --ssl
+  exit 0
+else
+  echo "Bad name of import file. An import file must have a name like this <database name>.<collection name>.json."
+  exit 1
+fi

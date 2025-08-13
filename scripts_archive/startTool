@@ -1,0 +1,106 @@
+#!/bin/bash
+#*************************************************************************************
+# start tool needed for the database connection
+# Use without argument
+#*************************************************************************************
+# D. Malki : Creation     10/05/2020  VERSION: 1.00
+#*************************************************************************************
+#. /etc/rc.d/init.d/functions
+#local_path=$(dirname $(readlink -f $0))
+rm -rf ~/*.log
+local_path=/logiciel/scripts
+. $local_path/functions
+dba=$(isDBAFromUser $USER)
+sia=$(getSIAFromUser $USER)
+irn=$(getIrnFromUser $USER)
+if [[ "$clouder" == "aws" ]]; then
+  isYetMount=$(mount | grep "$bucketTool on /home/$USER/$mountPoint")
+fi
+if [[ "$clouder" == "gcp" ]]; then
+#  isYetMount=$(mount | grep "$USER on /home/$USER/$mountPoint type fuse")
+   isYetMount=$(mount | grep "on /home/$USER/$mountPoint")
+fi
+if [[ "$isYetMount" != *" on /home/$USER/$mountPoint"* ]]; then
+  # at first create folder if it doen't yet exist
+  rm -rf ~/$mountPoint
+  mkdir ~/$mountPoint
+  #generate credentials
+  . $local_path/generateBucketCredential
+  bucketName=$(getBucketNameFromUser $USER)
+  if [[ "$dba" == "1" ]]; then
+    $bucketTool db-export-import /home/$USER/$mountPoint
+  else
+    envIndexed=$(getEnvFromUser $USER)
+    userEnv=${envIndexed:0:3}
+    if [[ "$clouder" == "aws" ]]; then
+      $bucketTool db-export-import-${userEnv}:/$sia /home/$USER/$mountPoint
+    fi
+    if [[ "$clouder" == "gcp" ]]; then
+      if [[ -f /home/$USER/.credentials/credential.json ]]; then
+        $bucketTool -key-file=/home/$USER/.credentials/credential.json $bucketName /home/$USER/$mountPoint
+      fi
+    fi
+  fi
+fi
+if [[ "$dba" == "1" ]]; then
+  tool=dbeaver
+else
+  tool=$(getVaultFieldFromUser $USER tool)
+fi
+case "$tool" in
+'dbeaver')
+  /logiciel/scripts/generateConnection
+  /logiciel/scripts/delLockDbeaver
+  $dbeaver_application
+;;
+'dbeaver-pgsql')
+  $(updateDrivers $USER)
+  /logiciel/scripts/generateConnection
+  /logiciel/scripts/delLockDbeaver
+  #if [[ "$USER" == "gcp-irn-67512-qrq-dev01-db-admin" ]]; then
+  #  dconf-editor
+  #fi
+  $dbeaver_application
+;;
+'dbeaver-mysql')
+  $(updateDrivers $USER)  
+  /logiciel/scripts/generateConnection
+  /logiciel/scripts/delLockDbeaver
+  #if [[ "$USER" == "gcp-irn-67512-qrq-dev01-db-admin" ]]; then
+  #  dconf-editor
+  #fi
+  $dbeaver_application
+;;
+'compass')
+  /logiciel/scripts/generateConnection
+  mongodb-compass --no-sandbox
+;;
+'robo3t')
+  /logiciel/scripts/generateConnection
+  /logiciel/scripts/delLockRobo3t  
+  ${robo3t_application}
+;;
+'chrome')
+  url=$(getVaultFieldFromUser $USER url)
+  uuid=$(uuidgen)
+  cp -Rf ~/.config/google-chrome /tmp/$uuid
+  ${chrome} --kiosk --disable-fre --no-default-browser-check --no-first-run --ignore-certificate-errors --user-data-dir=/tmp/$uuid $url
+;;
+'neo4j')
+  url=$(getVaultFieldFromUser $USER url)
+  port=$(getVaultFieldFromUser $USER port)
+  uuid=$(uuidgen)
+  cp -Rf ~/.config/google-chrome /tmp/$uuid
+  ${chrome} --no-proxy-server --incognito --kiosk --disable-fre --no-default-browser-check --no-first-run --ignore-certificate-errors --simulate-outdated-no-au --user-data-dir=/tmp/$uuid "http://$url:$port/browser?dbms=neo4j://neo4j@$url:7687&db=neo4j"
+;;
+'pgsql')  $scriptRunner -DheadlessScript=$headlessScript -DbucketScript=$(getBucketNameFromUser $USER) -DbucketScriptArchive=$(getBucketNameFromUser $USER)_archive -DtoolScript=$psql_script -DtoolImport=$psql_import -DdataFilter=$psql_import_ext -DscriptFilter=$psql_script_ext -DdataFormat="^[\w,\s-]+\.[\w,\s-]+\.[\w,\s-]+$" -DauthScope="openid alliance_profile" $scriptRunnerJar
+;;
+'mysql')  $scriptRunner -DheadlessScript=$headlessScript -DbucketScript=$(getBucketNameFromUser $USER) -DbucketScriptArchive=$(getBucketNameFromUser $USER)_archive -DtoolScript=$mysql_script -DtoolImport=$mysql_import -DdataFilter=$mysql_import_ext -DscriptFilter=$mysql_script_ext -DdataFormat="^[\w,\s-]+\.[\w,\s-]+\.[\w,\s-]+$" -DauthScope="openid alliance_profile" $scriptRunnerJar
+;;
+'mongo')
+  $scriptRunner -DheadlessScript=$headlessScript -DbucketScript=$(getBucketNameFromUser $USER) -DbucketScriptArchive=$(getBucketNameFromUser $USER)_archive -DtoolScript=$mgo_script -DtoolImport=$mgo_import -DdataFilter=$mgo_import_ext -DscriptFilter=$mgo_script_ext -DdataFormat="^[\w,\s-]+\.[\w,\s-]+\.[\w,\s-]+$" -DauthScope="openid alliance_profile" $scriptRunnerJar
+;;
+'*')
+echo  $dbeaver_application -newInstance -con \"driver=Postgresql-aws|host=$host|port=$port|user=$user|password=$password|connect=true\"
+;;
+esac

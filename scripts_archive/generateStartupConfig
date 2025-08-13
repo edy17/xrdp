@@ -1,0 +1,25 @@
+#!/bin/bash
+#*************************************************************************************
+# Generate the startup file of DBeaver for mate desktop
+# Use without argument
+#*************************************************************************************
+# D. Malki : Creation     10/05/2020  VERSION: 1.00
+#*************************************************************************************
+#. /etc/rc.d/init.d/functions
+#local_path=$(dirname $(readlink -f $0))
+local_path=/logiciel/scripts
+. $local_path/functions
+checkPath $config_path
+checkPath $autostart_path
+startup_file=$autostart_path/dbeaver.desktop
+#delFileIfExist $startup_file
+rm -rf $autostart_path/*
+echo "[Desktop Entry]">>$startup_file
+echo "Type=Application">>$startup_file
+echo "Exec=$local_path/startTool">>$startup_file
+echo "Hidden=false">>$startup_file
+echo "X-MATE-Autostart-enabled=true">>$startup_file
+echo "Name[en_US]=dbeaver">>$startup_file
+echo "Name=dbeaver">>$startup_file
+echo "Comment[en_US]=">>$startup_file
+echo "Comment=Generate by the script /logiciel/scripts/generateStartupConfig">>$startup_file

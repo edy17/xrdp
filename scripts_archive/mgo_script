@@ -1,0 +1,16 @@
+#!/bin/bash
+#*************************************************************************************
+# For mongodb, process commands from a file
+# Use with commands file argument
+#*************************************************************************************
+# D. Malki : Creation     08/03/2023 VERSION: 1.00
+#*************************************************************************************
+local_path=/logiciel/scripts
+. $local_path/functions
+file=$1
+hostname=$(getVaultFieldFromUser $USER hostname)
+certificate=$(getVaultFormattedFieldFromUser $USER certificate)
+pemLocation=~/.atlas_$USER.pem
+echo -e "$certificate">$pemLocation
+$current_mongosh "mongodb+srv://$hostname/myDB?authSource=%24external&authMechanism=MONGODB-X509" --apiVersion 1 --tls --tlsCertificateKeyFile $pemLocation < $file
+

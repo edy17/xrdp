@@ -1,0 +1,21 @@
+#!/bin/bash
+#*************************************************************************************
+# Set the .profile_bash for vault access
+# Use without argument
+#*************************************************************************************
+# D. Malki : Creation     10/05/2020  VERSION: 1.00
+#*************************************************************************************
+#. /etc/rc.d/init.d/functions
+#local_path=$(dirname $(readlink -f $0))
+local_path=/logiciel/scripts
+. $local_path/functions
+profile_bash_file=~/.bash_profile
+delFileIfExist $profile_bash_file
+echo "if [ -f ~/.bashrc ]; then">>$profile_bash_file
+echo "        . ~/.bashrc">>$profile_bash_file
+echo "fi">>$profile_bash_file
+echo "PATH=$PATH:$HOME/.local/bin:$HOME/bin:/logiciel/vault">>$profile_bash_file
+echo "export PATH">>$profile_bash_file
+echo "VAULT_ADDR=http://localhost:8200">>$profile_bash_file
+echo "export VAULT_ADDR">>$profile_bash_file
+. ~/.bash_profile
