@@ -1,0 +1,304 @@
+---
+#Install java for tools
+- name: install java
+  yum:
+    name: java
+  tags: [ "packages","dbeaver" ]
+
+- name: Ensure temp download directory exist
+  file: state=directory path={{install_dir}}
+  tags: [ "packages","dbeaver" ]
+
+#Install python
+- name: install pip modules
+  pip:
+    name: "{{item}}"
+  with_items: "{{pip_modules}}"
+  tags: [ "packages","dbeaver" ]
+
+#Get the list of archive needed in the S3 buckt 
+- name: List bucket objects
+  aws_s3:
+    bucket: "{{s3_archives_bucket_name}}"
+    mode: list
+  register: bucket
+
+- debug: var=bucket.s3_keys
+
+- name: get packages
+  aws_s3:
+    bucket: "{{s3_archives_bucket_name}}"
+    object: "{{item}}"
+    dest: "{{install_dir}}/{{item}}"
+    mode: get
+    overwrite: different
+  with_items: "{{archives_list}}"
+  tags: [ "packages","dbeaver" ]
+
+- name: unarchive packages
+  unarchive:
+    src: "{{install_dir}}/{{item}}"
+    dest: "{{install_dir}}"
+    copy: no
+  with_items: "{{archives_list}}"
+  tags: [ "packages","dbeaver" ]
+
+#Install vault agent
+- name: get vault
+  aws_s3:
+    bucket: "{{s3_archives_bucket_name}}"
+    object: "{{vault_archive}}"
+    dest: "{{install_dir}}/{{vault_archive}}"
+    mode: get
+    overwrite: different
+  tags: [ "packages","dbeaver" ]
+
+- name: unarchive vault
+  unarchive:
+    src: "{{install_dir}}/{{vault_archive}}"
+    dest: "{{install_dir}}"
+  tags: [ "packages","dbeaver" ]
+
+- name: Change vault address
+  replace:
+    path: "{{install_dir}}/vault/agent/config/config.hcl"
+    regexp: '\bhttps:\/\/vault.dc-eu-west-1.ops.aws.renault.com:8200\b'
+    replace: 'https://vault-gcp.ope.services.renault.fr:8200'
+  tags: [ "packages","dbeaver" ]
+
+- name: install service
+  shell: |
+    /bin/cp -f {{install_dir}}/vault/agent/vault-agent.service  /etc/systemd/system/vault-agent.service
+    chmod 664 /etc/systemd/system/vault-agent.service
+    systemctl enable vault-agent
+    systemctl start vault-agent
+  tags: [ "packages","dbeaver" ]
+
+- name: change .bash_profile file
+  blockinfile:
+    path: ~/.bash_profile
+    block: |
+      PATH=$PATH:{{install_dir}}/vault
+      export PATH
+      VAULT_ADDR=http://localhost:8200
+      export VAULT_ADDR
+#repo file for gcsfuse
+- name: change .bash_profile file
+  blockinfile:
+    path: /etc/yum.repos.d/gcsfuse.repo
+    create: yes
+    block: |
+      [gcsfuse]
+      name=gcsfuse (packages.cloud.google.com)
+      baseurl=https://packages.cloud.google.com/yum/repos/gcsfuse-el7-x86_64
+      enabled=1
+      gpgcheck=0
+      repo_gpgcheck=0
+
+#Install scripts
+- name: get scripts
+  aws_s3:
+    bucket: "{{s3_archives_bucket_name}}"
+    object: "{{scripts_archive}}"
+    dest: "{{install_dir}}/{{scripts_archive}}"
+    mode: get
+    overwrite: different
+  tags: [ "packages","dbeaver" ]
+
+- name: install scripts
+  shell: "tar xvf {{install_dir}}/{{scripts_archive}} --directory {{install_dir}}"
+  tags: [ "packages","dbeaver" ]
+
+#Change script depends on clouder
+- name: Change clouder variable
+  replace:
+    path: "/logiciel/scripts/init-env"
+    regexp: '\bclouder=aws\b'
+    replace: 'clouder=gcp'
+  tags: [ "packages","dbeaver" ]
+
+- name: install screen
+  yum:
+    name: screen
+  tags: [ "packages","dbeaver" ]
+
+- name: install at
+  yum:
+    name: at
+  tags: [ "packages","dbeaver" ]
+
+- name: enable and start atd
+  service:
+    name: atd
+    state: started
+    enabled: yes
+  tags: [ "packages","dbeaver" ]
+  
+  #Use installed scripts to cleanup xrdp disconnected session
+- name: install cleanup xrdp disconnected session
+  shell: "echo '/usr/bin/screen -dmS xrdp_cleanup {{install_dir}}/scripts/cleanupDisconnectedSessions' | at now"
+  tags: [ "packages","dbeaver" ]
+
+- name: configure epel repo on repo server
+  yum_repository:
+    name: epel
+    description: EPEL YUM repo
+    baseurl: https://download.fedoraproject.org/pub/epel/$releasever/$basearch/
+    gpgcheck: true
+    gpgkey: http://fr.mirror.babylon.network/epel/RPM-GPG-KEY-EPEL-7
+  tags: [ "packages","dbeaver" ]
+
+- name: yum-clean-metadata
+  command: "yum clean metadata"
+  become: true
+  tags: [ "packages","dbeaver" ]
+
+- name: install epel-release
+  yum:
+    name: epel-release
+  notify: yum-clean-metadata
+  tags: [ "packages","dbeaver" ]
+
+- name: install xrdp
+  yum:
+    name: xrdp
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
+
+#Update Xrdp configration file
+- name: Change EnableUserWindowManager Value to false
+  replace:
+    path: "/etc/xrdp/sesman.ini"
+    regexp: '\bEnableUserWindowManager=true\b'
+    replace: 'EnableUserWindowManager=false'
+  tags: [ "packages","dbeaver" ]
+
+- name: Change Policy=Default Value to UBC
+  replace:
+    path: "/etc/xrdp/sesman.ini"
+    regexp: '\bPolicy=Default\b'
+    replace: 'Policy=UBC'
+  tags: [ "packages","dbeaver" ]
+
+- name: Change KillDisconnected Value to true
+  replace:
+    path: "/etc/xrdp/sesman.ini"
+    regexp: '\bKillDisconnected=false\b'
+    replace: 'KillDisconnected=true'
+  tags: [ "packages","dbeaver" ]
+
+- name: Change DisconnectedTimeLimit Value to 60
+  replace:
+    path: "/etc/xrdp/sesman.ini"
+    regexp: '\bDisconnectedTimeLimit=0\b'
+    replace: 'DisconnectedTimeLimit=60'
+  tags: [ "packages","dbeaver" ]
+
+- name: enable and start xrdp
+  service:
+    name: xrdp
+    state: started
+    enabled: yes
+  tags: [ "packages","dbeaver" ]
+
+- name: Install Mate # this works
+  shell: "yum -y groupinstall 'MATE Desktop'"
+  become: true
+  tags: [ "packages","dbeaver" ]
+
+- name: install packages
+  yum:
+    name: "{{item}}"
+  with_items: "{{desktop_packages}}"
+  notify: yum-clean-metadata
+  tags: [ "packages","dbeaver" ]
+
+
+- name: ensure /etc/sysconfig/desktop exists
+  file:
+    path: /etc/sysconfig/desktop
+    state: touch
+
+- name: Change PREFERRED in /etc/sysconfig/desktop
+  lineinfile:
+    path: /etc/sysconfig/desktop
+    regexp: '^PREFERRED'
+    line: 'PREFERRED=/usr/bin/mate-session'
+  become: true
+  tags: [ "packages","dbeaver" ]
+
+# For the cleaning script we need lsof
+- name: install lsof
+  yum:
+    name: lsof
+  tags: [ "packages","dbeaver" ]
+
+# Access to the bucket for Data export/import through fs mounted point
+- name: install gcsfuse
+  yum:
+    name: gcsfuse
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
+
+# Install wget
+- name: install wget
+  yum:
+    name: wget
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
+
+# get rpm repo for postgresql
+- name: install service
+  shell: |
+    wget -P {{install_dir}}/ https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+    /usr/bin/rpm -ivh {{install_dir}}/pgdg-redhat-repo-latest.noarch.rpm
+  tags: [ "packages","dbeaver" ]
+
+# Install latest version 12 of pgsql
+- name: install pgsql latest 12
+  yum:
+    name: postgresql-server.x86_64
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
+
+# Install version 11 of pgsql
+- name: install pgsql 11
+  yum:
+    name: postgresql11-server.x86_64
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
+
+# Install version 10 of pgsql
+- name: install pgsql 10
+  yum:
+    name: postgresql10-server.x86_64
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
+
+# Install version 9.6 of pgsql
+- name: install pgsql 9.6
+  yum:
+    name: postgresql96-server.x86_64
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
+
+# Install version 9.5 of pgsql
+- name: install pgsql 9.5
+  yum:
+    name: postgresql95-server.x86_64
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
+
+# Install version 9.4 pgsql
+- name: install pgsql 9.4
+  yum:
+    name: postgresql94-server.x86_64
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
+
+# Install iq
+- name: install jq
+  yum:
+    name: jq
+    update_cache: yes
+  tags: [ "packages","dbeaver" ]
