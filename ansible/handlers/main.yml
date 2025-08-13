@@ -1,0 +1,14 @@
+---
+- name: yum-clean-cache
+  command: yum -y clean all
+  args:
+    warn: no
+  become: true
+  tags: ["packages","dbeaver"]
+
+- name: yum-clean-metadata
+  command: "yum clean metadata"
+  args:
+    warn: no
+  become: true
+  tags: ["packages","dbeaver"]
