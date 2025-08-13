@@ -1,0 +1,31 @@
+---
+dbeaver_version: "7.1.2"
+install_dir: "/logiciel"
+#List of pacckage that mate desktop needs 
+desktop_packages:
+  - mesa-dri-drivers
+  - dejavu-sans-fonts
+  - dejavu-sans-mono-fonts
+  - dejavu-serif-fonts
+  - mate-session-manager
+  - mate-panel
+  - marco
+  - caja
+  - mate-terminal
+pip_modules:
+  - boto
+  - boto3
+  - botocore
+  - pexpect >= 3.3
+#Name of the S3 aws bucket where archives are stored
+s3_archives_bucket_name: tmpexchange
+
+#Name of stored archives
+archives_list:
+  - "dbeaver-ce-{{dbeaver_version}}-linux.gtk.x86_64.tar.gz"
+  - dbeaver_drivers.tar.gz
+#We don't need anymore studio3t
+# - studio-3t-linux-x64.tar.gz
+  - dbeaver_profile_template.tar.gz
+scripts_archive: scripts.tar.gz
+vault_archive: vault.tar.gz
